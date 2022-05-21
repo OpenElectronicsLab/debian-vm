@@ -1,0 +1,37 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2022 Eric Herman <eric@freesa.org>
+
+# help set
+# -e  Exit immediately if a command exits with a non-zero status.
+set -e
+
+TARGET_QCOW2=$1
+if [ "_$1_" == "__" ]; then
+	echo "usage: $0 file.qcow2 \
+\$RAM \$CORES \$SSH_PORT \$HTTP_PORT \$HTTPS_PORT"
+	exit 1
+fi
+
+#TODO: use getopts
+KVM_RAM=$2
+KVM_CORES=$3
+VM_PORT_SSH=$4
+VM_PORT_HTTP=$5
+VM_PORT_HTTPS=$6
+
+KVM_DISPLAY=none
+
+qemu-system-x86_64 -hda $TARGET_QCOW2 \
+		-m $KVM_RAM \
+		-smp $KVM_CORES \
+		 -machine type=pc,accel=kvm \
+		-display $KVM_DISPLAY \
+		-nic user,\
+hostfwd=tcp:127.0.0.1:$VM_PORT_SSH-:22,\
+hostfwd=tcp:127.0.0.1:$VM_PORT_HTTP-:80,\
+hostfwd=tcp:127.0.0.1:$VM_PORT_HTTPS-:443 &
+echo "$!" >		${TARGET_QCOW2}.pid
+echo "$VM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
+echo "$VM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
+echo "$VM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port

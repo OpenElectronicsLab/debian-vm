@@ -1,0 +1,13 @@
+iso
+*.iso
+*.qcow2
+*.pid
+*.log
+*.port
+*.qcow2.sh
+
+id_rsa_host_tmp
+id_rsa_host_tmp.pub
+id_rsa_tmp
+id_rsa_tmp.pub
+vm_root_password
