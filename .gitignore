@@ -4,7 +4,7 @@ iso
 *.pid
 *.log
 *.port
-*.qcow2.sh
+*.qcow2.ssh.sh
 
 id_rsa_host_tmp
 id_rsa_host_tmp.pub

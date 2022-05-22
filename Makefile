@@ -77,6 +77,8 @@ vm_root_password:
 	ls -l vm_root_password
 	@echo "SUCCESS $@"
 
+SSH_PARAMS="-i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes"
+
 id_rsa_tmp:
 	@echo "begin $@"
 	ssh-keygen -b 4096 -t rsa -N "" -C "temporary-key" -f ./id_rsa_tmp
@@ -113,12 +115,12 @@ iso/authorized_keys: $(ISO_CREATED_MARKER) id_rsa_tmp.pub \
 iso/preseed/autoinstall-preseed.seed: $(AUTO_INSTALL_PRESEED) \
 		$(ISO_CREATED_MARKER)
 	mkdir -pv iso/preseed
-	cp $< $@
+	cp -v $< $@
 
 # update the grub.cfg to do a preseeded install
 # (Used for Legacy BIOS)
 iso/isolinux/isolinux.cfg : isolinux.cfg $(ISO_CREATED_MARKER)
-	cp $< $@
+	cp -v $< $@
 
 # generate the new iso install image
 $(ISO_TARGET): iso/preseed/autoinstall-preseed.seed \
@@ -144,28 +146,19 @@ $(BASE_QCOW2): $(ISO_TARGET)
 
 launch-base-vm: $(BASE_QCOW2)
 	@echo "begin $@"
-	KVM_RAM=$(KVM_RAM) KVM_CORES=$(KVM_CORES) bin/launch-qemu $(BASE_QCOW2)
+	KVM_RAM=$(KVM_RAM) KVM_CORES=$(KVM_CORES) KVM_SSH_PARAMS=$(SSH_PARAMS) \
+		bin/launch-qemu $(BASE_QCOW2)
 	bin/retry $(RETRIES) $(DELAY) \
-		ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
-			-p`cat $(BASE_QCOW2).ssh.port` \
-			root@127.0.0.1 \
-			'/bin/true'
+		./$(BASE_QCOW2).ssh.sh '/bin/true'
 	echo "check the key matches the one we generated"
 	ssh-keyscan -p`cat $(BASE_QCOW2).ssh.port` 127.0.0.1 \
 		| grep `cat id_rsa_host_tmp.pub | cut -f2 -d' '`
-	echo ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
-		-p`cat $(BASE_QCOW2).ssh.port` \
-		root@127.0.0.1 > ssh-$(BASE_QCOW2).sh
-	chmod +x ssh-$(BASE_QCOW2).sh
+	./basic-debian-10.12.0-vm.qcow2.ssh.sh '/bin/true'
 	@echo "SUCCESS $@"
-	echo "$@ kvm running connect with ./ssh-$(BASE_QCOW2).sh"
 
 shutdown-kvm:
 	@echo "begin $@"
-	ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
-		-p`cat $(BASE_QCOW2).ssh.port` \
-		root@127.0.0.1 \
-		'shutdown -h -t 2 now & exit'
+	./$(BASE_QCOW2).ssh.sh 'shutdown -h -t 2 now & exit'
 	{ while kill -0 `cat $(BASE_QCOW2).pid`; do \
 		echo "wating for `cat $(BASE_QCOW2).pid`"; sleep 1; done }
 	sleep 1

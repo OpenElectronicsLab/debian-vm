@@ -25,6 +25,7 @@ if [ "_$1_" == "__" ]; then
 	echo "KVM_PORT_HTTPS  default: a free port in range KVM_PORTS MIN-MAX"
 	echo "KVM_PORTS_MIN   default: 50000"
 	echo "KVM_PORTS_MAX   default: 59999"
+	echo "KVM_SSH_PARAMS  default: (none)"
 	exit 1
 fi
 
@@ -85,10 +86,6 @@ fi
 if [ "_${KVM_PORT_HTTPS}_" == "__" ] || [ ${KVM_PORT_HTTPS} -lt 1]; then
 	KVM_PORT_HTTPS=`free-port`
 fi
-
-echo "$KVM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
-echo "$KVM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
-echo "$KVM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port
 qemu-system-x86_64 -hda $TARGET_QCOW2 \
 		-m $KVM_RAM \
 		-smp $KVM_CORES \
@@ -99,5 +96,22 @@ hostfwd=tcp:127.0.0.1:$KVM_PORT_SSH-:22,\
 hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTP-:80,\
 hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTPS-:443 &
 echo "$!" >	${TARGET_QCOW2}.pid
+echo "$KVM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
+echo "$KVM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
+echo "$KVM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port
+
+KVM_SSH_SCRIPT=${TARGET_QCOW2}.ssh.sh
+cat << EOF > $KVM_SSH_SCRIPT
+#!/bin/bash
+
+ssh $KVM_SSH_PARAMS \\
+	-p${KVM_PORT_SSH} \\
+	root@127.0.0.1 \\
+	\$@
+EOF
+chmod +x $KVM_SSH_SCRIPT
+cat $KVM_SSH_SCRIPT
+
 echo "$TARGET_QCOW2 running as pid $(cat ${TARGET_QCOW2}.pid)"
 echo "ports: $KVM_PORT_SSH -> 22, $KVM_PORT_HTTP -> 80, $KVM_PORT_HTTPS -> 443"
+echo "connect with: ${TARGET_QCOW2}.ssh.sh"
