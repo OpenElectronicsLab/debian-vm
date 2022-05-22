@@ -2,36 +2,102 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2022 Eric Herman <eric@freesa.org>
 
+if [ "_${VERBOSE}_" != "__" ] && [ "$VERBOSE" -gt 0 ]; then
+	# help set
+	# -x  Print commands and their arguments as they are executed.
+	set -x
+fi
+
 # help set
 # -e  Exit immediately if a command exits with a non-zero status.
 set -e
 
 TARGET_QCOW2=$1
 if [ "_$1_" == "__" ]; then
-	echo "usage: $0 file.qcow2 \
-\$RAM \$CORES \$SSH_PORT \$HTTP_PORT \$HTTPS_PORT"
+	echo "usage: $0 file.qcow2"
+	echo
+	echo "the following environment variables are honored:"
+	echo "KVM_RAM         default: 2G"
+	echo "KVM_CORES       default: 1"
+	echo "KVM_DISPLAY     default: none"
+	echo "KVM_PORT_SSH    default: a free port in range KVM_PORTS MIN-MAX"
+	echo "KVM_PORT_HTTP   default: a free port in range KVM_PORTS MIN-MAX"
+	echo "KVM_PORT_HTTPS  default: a free port in range KVM_PORTS MIN-MAX"
+	echo "KVM_PORTS_MIN   default: 50000"
+	echo "KVM_PORTS_MAX   default: 59999"
 	exit 1
 fi
 
-#TODO: use getopts
-KVM_RAM=$2
-KVM_CORES=$3
-VM_PORT_SSH=$4
-VM_PORT_HTTP=$5
-VM_PORT_HTTPS=$6
+if [ "_${KVM_RAM}_" == "__" ]; then
+	KVM_RAM=2G
+fi
 
-KVM_DISPLAY=none
+if [ "_${KVM_CORES}_" == "__" ]; then
+	KVM_CORES=1
+fi
 
+if [ "_${KVM_DISPLAY}_" == "__" ]; then
+	KVM_DISPLAY=none
+fi
+
+function free-port()
+{
+	if [ "_${KVM_PORTS_MIN}_" == "__" ]; then
+		KVM_PORTS_MIN=50000
+	fi
+	if [ "_${KVM_PORTS_MAX}_" == "__" ]; then
+		KVM_PORTS_MAX=59999
+	fi
+
+	# ss(8) is a "socket statistics" utility
+	# comm(1) compares files on disk
+	# seq(1) emits a sequence of numbers
+	# shuf(1) "shuffles" the input in to a permutation for output
+	# head(1) will allow us to only take the first line
+
+	# We will pass two "files" to comm
+	#   comm's produces three-columns output.
+	#     column 1 contains lines unique to FILE1,
+	#     column 2 contains lines unique to FILE2,
+	#     column 3 contains lines common to both
+	#    we will supress columns 2 and 3
+	# file 1 is a sequence of acceptable numbers
+	# file 2 is the list of sockets in use
+	comm -2 -3 \
+		<(seq $KVM_PORTS_MIN $KVM_PORTS_MAX | sort --unique) \
+		<(ss --tcp --no-header --all --numeric \
+			| awk '{print $4}' \
+			| cut --delimiter=':' --fields=2 \
+			| sort --unique \
+		 ) \
+		| shuf \
+		| head --lines=1;
+}
+
+if [ "_${KVM_PORT_SSH}_" == "__" ] || [ ${KVM_PORT_SSH} -lt 1]; then
+	KVM_PORT_SSH=`free-port`
+fi
+
+if [ "_${KVM_PORT_HTTP}_" == "__" ] || [ ${KVM_PORT_HTTP} -lt 1]; then
+	KVM_PORT_HTTP=`free-port`
+fi
+
+if [ "_${KVM_PORT_HTTPS}_" == "__" ] || [ ${KVM_PORT_HTTPS} -lt 1]; then
+	KVM_PORT_HTTPS=`free-port`
+fi
+
+echo "$KVM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
+echo "$KVM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
+echo "$KVM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port
 qemu-system-x86_64 -hda $TARGET_QCOW2 \
 		-m $KVM_RAM \
 		-smp $KVM_CORES \
 		 -machine type=pc,accel=kvm \
 		-display $KVM_DISPLAY \
 		-nic user,\
-hostfwd=tcp:127.0.0.1:$VM_PORT_SSH-:22,\
-hostfwd=tcp:127.0.0.1:$VM_PORT_HTTP-:80,\
-hostfwd=tcp:127.0.0.1:$VM_PORT_HTTPS-:443 &
-echo "$!" >		${TARGET_QCOW2}.pid
-echo "$VM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
-echo "$VM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
-echo "$VM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port
+hostfwd=tcp:127.0.0.1:$KVM_PORT_SSH-:22,\
+hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTP-:80,\
+hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTPS-:443 &
+echo "$!" >	${TARGET_QCOW2}.pid
+echo "$TARGET_QCOW2 running as pid $(cat ${TARGET_QCOW2}.pid)"
+echo "ports: $KVM_PORT_SSH -> 22, $KVM_PORT_HTTP -> 80, $KVM_PORT_HTTPS -> 443"

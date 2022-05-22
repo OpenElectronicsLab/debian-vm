@@ -28,19 +28,9 @@ DISTRO_ORIG_ISO=debian-10.12.0-amd64-netinst.iso
 DISTRO_ISO_URL=https://cdimage.debian.org/mirror/cdimage/archive/10.12.0/amd64/iso-cd/debian-10.12.0-amd64-netinst.iso
 ISO_TARGET=debian-10.12.0-autoinstall.iso
 ISO_TARGET_VOLUME=debian-10.12.0-autoinstall
-TARGET_QCOW2=basic-debian-10.12.0-vm.qcow2
+BASE_QCOW2=basic-debian-10.12.0-vm.qcow2
 AUTO_INSTALL_PRESEED=debian-10-autoinstall-preseed.seed
 ISO_CREATED_MARKER=iso/README.txt
-
-ifeq ($(origin VM_PORT_SSH), undefined)
-VM_PORT_SSH := $(shell bin/free-port)
-endif
-ifeq ($(origin VM_PORT_HTTP), undefined)
-VM_PORT_HTTP := $(shell bin/free-port)
-endif
-ifeq ($(origin VM_PORT_HTTPS), undefined)
-VM_PORT_HTTPS := $(shell bin/free-port)
-endif
 
 INITIAL_DISK_SIZE=20G
 KVM_CORES=2
@@ -141,48 +131,42 @@ $(ISO_TARGET): iso/preseed/autoinstall-preseed.seed \
 	ls -l $(ISO_TARGET)
 	@echo "SUCCESS $@"
 
-$(TARGET_QCOW2): $(ISO_TARGET)
+$(BASE_QCOW2): $(ISO_TARGET)
 	@echo "begin $@"
-	bin/is-port-free $(VM_PORT_SSH)
 	qemu-img create -f qcow2 tmp.qcow2 $(INITIAL_DISK_SIZE)
 	qemu-system-x86_64 -hda tmp.qcow2 -cdrom $(ISO_TARGET) \
 		-m $(KVM_INSTALL_RAM) -smp $(KVM_CORES) \
 		-machine type=pc,accel=kvm \
-		-display none \
-		-nic user,hostfwd=tcp:127.0.0.1:$(VM_PORT_SSH)-:22
-	mv tmp.qcow2 $(TARGET_QCOW2)
-	ls -l $(TARGET_QCOW2)
+		-display none
+	mv -v tmp.qcow2 $(BASE_QCOW2)
+	ls -l $(BASE_QCOW2)
 	@echo "SUCCESS $@"
 
-launch-base-vm: $(TARGET_QCOW2)
+launch-base-vm: $(BASE_QCOW2)
 	@echo "begin $@"
-	bin/is-port-free $(VM_PORT_SSH)
-	bin/launch-qemu $(TARGET_QCOW2) $(KVM_RAM) $(KVM_CORES) \
-		$(VM_PORT_SSH) $(VM_PORT_HTTP) $(VM_PORT_HTTPS)
+	KVM_RAM=$(KVM_RAM) KVM_CORES=$(KVM_CORES) bin/launch-qemu $(BASE_QCOW2)
 	bin/retry $(RETRIES) $(DELAY) \
-		ssh -p$(VM_PORT_SSH) \
-			-oNoHostAuthenticationForLocalhost=yes \
+		ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
+			-p`cat $(BASE_QCOW2).ssh.port` \
 			root@127.0.0.1 \
-			-i ./id_rsa_tmp \
 			'/bin/true'
 	echo "check the key matches the one we generated"
-	ssh-keyscan -p$(VM_PORT_SSH) 127.0.0.1 \
+	ssh-keyscan -p`cat $(BASE_QCOW2).ssh.port` 127.0.0.1 \
 		| grep `cat id_rsa_host_tmp.pub | cut -f2 -d' '`
-	echo ssh -i ./id_rsa_tmp -p$(VM_PORT_SSH) \
-		-oNoHostAuthenticationForLocalhost=yes \
-		root@127.0.0.1 > ssh-$(TARGET_QCOW2).sh
-	chmod +x ssh-$(TARGET_QCOW2).sh
+	echo ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
+		-p`cat $(BASE_QCOW2).ssh.port` \
+		root@127.0.0.1 > ssh-$(BASE_QCOW2).sh
+	chmod +x ssh-$(BASE_QCOW2).sh
 	@echo "SUCCESS $@"
-	echo "$@ kvm running connect with ./ssh-$(TARGET_QCOW2).sh"
+	echo "$@ kvm running connect with ./ssh-$(BASE_QCOW2).sh"
 
 shutdown-kvm:
 	@echo "begin $@"
-	ssh -p`cat $(TARGET_QCOW2).ssh.port` \
-		-oNoHostAuthenticationForLocalhost=yes \
+	ssh -i ./id_rsa_tmp -oNoHostAuthenticationForLocalhost=yes \
+		-p`cat $(BASE_QCOW2).ssh.port` \
 		root@127.0.0.1 \
-		-i ./id_rsa_tmp \
 		'shutdown -h -t 2 now & exit'
-	{ while kill -0 `cat $(TARGET_QCOW2).pid`; do \
-		echo "wating for `cat $(TARGET_QCOW2).pid`"; sleep 1; done }
+	{ while kill -0 `cat $(BASE_QCOW2).pid`; do \
+		echo "wating for `cat $(BASE_QCOW2).pid`"; sleep 1; done }
 	sleep 1
 	echo "yay"
