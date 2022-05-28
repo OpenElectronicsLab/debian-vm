@@ -5,6 +5,8 @@ iso
 *.log
 *.port
 *.qcow2.ssh.sh
+*.qcow2.shutdown.sh
+python-venv
 
 id_rsa_host_tmp
 id_rsa_host_tmp.pub

@@ -24,9 +24,10 @@ SHELL=/bin/bash
 # 10.0.0 to ... (Buster)
 # 11.0.0 to ... (Bullseye)
 
-DISTRO_ISO_URL=https://cdimage.debian.org/mirror/cdimage/archive/10.12.0/amd64/iso-cd/debian-10.12.0-amd64-netinst.iso
+# the variable DISTRO_ISO_URL is defined in generated-makefile-variables
+include generated-makefile-variables
+
 DISTRO_ORIG_ISO=debian-amd64-netinst.iso
-DISTRO_ORIG_ISO_SHA256=67f4fb15505b241d61e895890769e50d5cd850a163c03341702c6c4321a37ac0
 ISO_TARGET=debian-autoinstall.iso
 ISO_TARGET_VOLUME=debian-autoinstall
 BASE_QCOW2=basic-debian-vm.qcow2
@@ -44,18 +45,22 @@ RETRIES=$(shell echo "$(SSH_MAX_INIT_SECONDS)/$(DELAY)" | bc)
 
 default: launch-base-vm
 
+.PHONY: clean
 clean:
-	rm -rf iso *-autoinstall.iso *.qcow2 *.port *.pid *.qcow2.sh
+	rm -rf iso *-autoinstall.iso *.qcow2 *.port *.pid *.qcow2.sh \
+		python-venv
 
+.PHONY: spotless
 spotless:
 	git clean -dffx
 	git submodule foreach --recursive git clean -dffx
 
 
 # download the base install image
-$(DISTRO_ORIG_ISO):
+$(DISTRO_ORIG_ISO): sha256_hashes
 	@echo "begin $@"
 	wget $(DISTRO_ISO_URL) --output-document=$@
+	sha256sum --check sha256_hashes
 	ls -l $@
 	@echo "SUCCESS $@"
 
@@ -161,3 +166,21 @@ shutdown-kvm:
 	@echo "begin $@"
 	./$(BASE_QCOW2).shutdown.sh
 	echo "yay"
+
+python-venv/bin/activate: requirements.txt
+	rm -rf python-venv
+	python3 -m venv python-venv
+	source python-venv/bin/activate && \
+	 pip3 install --upgrade pip
+	source python-venv/bin/activate && \
+	 pip3 install -r requirements.txt
+
+.PHONY: update
+update: get-latest-debian-iso-version.py python-venv/bin/activate
+	source python-venv/bin/activate && \
+	 python3 ./$<
+
+.PHONY: black
+black: get-latest-debian-iso-version.py python-venv/bin/activate
+	source python-venv/bin/activate && \
+	 black $<
