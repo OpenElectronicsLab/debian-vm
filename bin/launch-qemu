@@ -112,6 +112,23 @@ EOF
 chmod +x $KVM_SSH_SCRIPT
 cat $KVM_SSH_SCRIPT
 
-echo "$TARGET_QCOW2 running as pid $(cat ${TARGET_QCOW2}.pid)"
+KVM_SHUTDOWN_SCRIPT=${TARGET_QCOW2}.shutdown.sh
+cat <<EOF > $KVM_SHUTDOWN_SCRIPT
+#!/bin/bash
+
+ssh $KVM_SSH_PARAMS \\
+	-p${KVM_PORT_SSH} \\
+	root@127.0.0.1 \\
+	'shutdown -h -t 2 now & exit'
+while kill -0 `cat ${TARGET_QCOW2}.pid`; do
+	echo "wating for `cat ${TARGET_QCOW2}.pid`"
+	sleep 1
+done
+sleep 1
+EOF
+chmod +x $KVM_SHUTDOWN_SCRIPT
+
+echo "$TARGET_QCOW2 running as pid `cat ${TARGET_QCOW2}.pid`"
 echo "ports: $KVM_PORT_SSH -> 22, $KVM_PORT_HTTP -> 80, $KVM_PORT_HTTPS -> 443"
-echo "connect with: ${TARGET_QCOW2}.ssh.sh"
+echo "Shutdown VM with: $KVM_SHUTDOWN_SCRIPT"
+echo "connect with: $KVM_SSH_SCRIPT"

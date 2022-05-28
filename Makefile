@@ -24,12 +24,13 @@ SHELL=/bin/bash
 # 10.0.0 to ... (Buster)
 # 11.0.0 to ... (Bullseye)
 
-DISTRO_ORIG_ISO=debian-10.12.0-amd64-netinst.iso
 DISTRO_ISO_URL=https://cdimage.debian.org/mirror/cdimage/archive/10.12.0/amd64/iso-cd/debian-10.12.0-amd64-netinst.iso
-ISO_TARGET=debian-10.12.0-autoinstall.iso
-ISO_TARGET_VOLUME=debian-10.12.0-autoinstall
-BASE_QCOW2=basic-debian-10.12.0-vm.qcow2
-AUTO_INSTALL_PRESEED=debian-10-autoinstall-preseed.seed
+DISTRO_ORIG_ISO=debian-amd64-netinst.iso
+DISTRO_ORIG_ISO_SHA256=67f4fb15505b241d61e895890769e50d5cd850a163c03341702c6c4321a37ac0
+ISO_TARGET=debian-autoinstall.iso
+ISO_TARGET_VOLUME=debian-autoinstall
+BASE_QCOW2=basic-debian-vm.qcow2
+AUTO_INSTALL_PRESEED=debian-autoinstall-preseed.seed
 ISO_CREATED_MARKER=iso/README.txt
 
 INITIAL_DISK_SIZE=20G
@@ -153,13 +154,10 @@ launch-base-vm: $(BASE_QCOW2)
 	echo "check the key matches the one we generated"
 	ssh-keyscan -p`cat $(BASE_QCOW2).ssh.port` 127.0.0.1 \
 		| grep `cat id_rsa_host_tmp.pub | cut -f2 -d' '`
-	./basic-debian-10.12.0-vm.qcow2.ssh.sh '/bin/true'
+	./$(BASE_QCOW2).ssh.sh '/bin/true'
 	@echo "SUCCESS $@"
 
 shutdown-kvm:
 	@echo "begin $@"
-	./$(BASE_QCOW2).ssh.sh 'shutdown -h -t 2 now & exit'
-	{ while kill -0 `cat $(BASE_QCOW2).pid`; do \
-		echo "wating for `cat $(BASE_QCOW2).pid`"; sleep 1; done }
-	sleep 1
+	./$(BASE_QCOW2).shutdown.sh
 	echo "yay"
