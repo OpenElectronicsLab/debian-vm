@@ -160,6 +160,9 @@ launch-base-vm: $(BASE_QCOW2)
 	ssh-keyscan -p`cat $(BASE_QCOW2).ssh.port` 127.0.0.1 \
 		| grep `cat id_rsa_host_tmp.pub | cut -f2 -d' '`
 	./$(BASE_QCOW2).ssh.sh '/bin/true'
+	@echo "base vm $(BASE_QCOW2) is running"
+	@echo "     vm can be stopped with 'make shutdown-kvm'"
+	@echo "  or vm can be stopped by running ./$(BASE_QCOW2).shutdown.sh"
 	@echo "SUCCESS $@"
 
 shutdown-kvm:

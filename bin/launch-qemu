@@ -95,7 +95,8 @@ qemu-system-x86_64 -hda $TARGET_QCOW2 \
 hostfwd=tcp:127.0.0.1:$KVM_PORT_SSH-:22,\
 hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTP-:80,\
 hostfwd=tcp:127.0.0.1:$KVM_PORT_HTTPS-:443 &
-echo "$!" >	${TARGET_QCOW2}.pid
+KVM_PID=$!
+echo "$KVM_PID" >	${TARGET_QCOW2}.pid
 echo "$KVM_PORT_SSH" >	${TARGET_QCOW2}.ssh.port
 echo "$KVM_PORT_HTTP" >	${TARGET_QCOW2}.http.port
 echo "$KVM_PORT_HTTPS" >	${TARGET_QCOW2}.https.port
@@ -120,10 +121,14 @@ ssh $KVM_SSH_PARAMS \\
 	-p${KVM_PORT_SSH} \\
 	root@127.0.0.1 \\
 	'shutdown -h -t 2 now & exit'
-while kill -0 `cat ${TARGET_QCOW2}.pid`; do
+while kill -0 $KVM_PID; do
 	echo "wating for `cat ${TARGET_QCOW2}.pid`"
 	sleep 1
 done
+rm -v ${TARGET_QCOW2}.pid \
+	${TARGET_QCOW2}.ssh.port \
+	${TARGET_QCOW2}.http.port \
+	${TARGET_QCOW2}.https.port
 sleep 1
 EOF
 chmod +x $KVM_SHUTDOWN_SCRIPT
